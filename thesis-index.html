@@ -1,0 +1,660 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Foundation Models for Time-Series Forecasting — EUR/NOK</title>
+<meta name="description" content="Master's thesis at NHH on whether transformer-based foundation models (TimesFM, Chronos2) can beat a random walk at forecasting EUR/NOK. By Erlend Rake Ellingsen & Brede Espelid." />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:           #0b0d10;
+    --bg-elev:      #12161b;
+    --bg-elev-2:    #1a1f26;
+    --line:         #232a33;
+    --line-strong:  #2f3946;
+    --text:         #e7ecf2;
+    --text-dim:     #98a2b3;
+    --text-muted:   #667085;
+    --accent:       #f59e0b;
+    --accent-soft:  #fbbf24;
+    --accent-bg:    rgba(245, 158, 11, 0.08);
+    --blue:         #60a5fa;
+    --green:        #34d399;
+    --purple:       #a78bfa;
+    --pink:         #f472b6;
+    --red:          #f87171;
+    --r-sm:         8px;
+    --r-md:         12px;
+    --r-lg:         16px;
+    --shadow:       0 1px 3px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.25);
+    --mono:         'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    font-feature-settings: 'cv02','cv03','cv04','cv11';
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { color: var(--accent-soft); }
+  .container { max-width: 1180px; margin: 0 auto; padding: 0 24px; }
+
+  /* ─── Top nav ──────────────────────────────────────── */
+  nav.top {
+    position: sticky; top: 0; z-index: 50;
+    backdrop-filter: blur(10px);
+    background: rgba(11,13,16,0.75);
+    border-bottom: 1px solid var(--line);
+  }
+  nav.top .inner {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 14px 24px; max-width: 1180px; margin: 0 auto;
+  }
+  nav.top .brand {
+    font-weight: 700; font-size: 15px; color: var(--text);
+    display: flex; gap: 10px; align-items: center;
+  }
+  nav.top .brand .dot {
+    width: 9px; height: 9px; background: var(--accent); border-radius: 50%;
+    box-shadow: 0 0 12px var(--accent);
+  }
+  nav.top .links { display: flex; gap: 22px; font-size: 14px; }
+  nav.top .links a { color: var(--text-dim); }
+  nav.top .links a:hover { color: var(--text); }
+  @media (max-width: 720px) { nav.top .links { display: none; } }
+
+  /* ─── Hero ─────────────────────────────────────────── */
+  .hero {
+    padding: 88px 24px 64px;
+    border-bottom: 1px solid var(--line);
+    background:
+      radial-gradient(1200px 500px at 80% -10%, rgba(245,158,11,.08), transparent 60%),
+      radial-gradient(800px 400px at 0% 0%, rgba(96,165,250,.05), transparent 60%);
+  }
+  .pill {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 6px 12px; border-radius: 999px;
+    background: var(--accent-bg); color: var(--accent);
+    border: 1px solid rgba(245,158,11,.25);
+    font-size: 12px; font-weight: 500; letter-spacing: .02em;
+    font-family: var(--mono);
+  }
+  .pill .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+  h1 {
+    font-size: clamp(34px, 5vw, 54px);
+    line-height: 1.1; font-weight: 800;
+    letter-spacing: -0.025em;
+    margin: 18px 0 16px;
+    max-width: 920px;
+  }
+  h1 .accent { color: var(--accent); }
+  .hero p.lede {
+    font-size: 19px; color: var(--text-dim);
+    max-width: 760px; margin: 0;
+  }
+  .meta {
+    margin-top: 28px; display: flex; gap: 20px; flex-wrap: wrap;
+    color: var(--text-muted); font-size: 14px;
+  }
+  .meta span { display: flex; gap: 8px; align-items: center; }
+  .meta svg { opacity: .6; }
+
+  /* ─── Stats ────────────────────────────────────────── */
+  section.stats {
+    padding: 56px 0; border-bottom: 1px solid var(--line);
+  }
+  .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+  }
+  @media (max-width: 720px) { .stat-grid { grid-template-columns: repeat(2, 1fr); } }
+  .stat {
+    background: var(--bg-elev);
+    border: 1px solid var(--line);
+    border-radius: var(--r-md);
+    padding: 24px;
+    transition: border-color .2s, transform .2s;
+  }
+  .stat:hover { border-color: var(--line-strong); transform: translateY(-2px); }
+  .stat .num {
+    font-size: 38px; font-weight: 700; color: var(--text);
+    font-family: var(--mono); letter-spacing: -0.02em;
+  }
+  .stat .num .accent { color: var(--accent); }
+  .stat .label {
+    color: var(--text-dim); font-size: 13px;
+    margin-top: 4px; text-transform: uppercase;
+    letter-spacing: .05em; font-weight: 500;
+  }
+
+  /* ─── Section common ───────────────────────────────── */
+  section.block { padding: 88px 0; border-bottom: 1px solid var(--line); }
+  .eyebrow {
+    color: var(--accent); font-size: 12px;
+    text-transform: uppercase; letter-spacing: .12em;
+    font-weight: 600; font-family: var(--mono);
+  }
+  h2 {
+    font-size: clamp(26px, 3.2vw, 36px);
+    line-height: 1.15; font-weight: 700;
+    letter-spacing: -0.02em; margin: 10px 0 12px;
+  }
+  .section-lede {
+    color: var(--text-dim); font-size: 17px;
+    max-width: 760px; margin: 0 0 40px;
+  }
+
+  /* ─── Research questions ──────────────────────────── */
+  .rq-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+  }
+  @media (max-width: 900px) { .rq-grid { grid-template-columns: 1fr; } }
+  .rq {
+    background: var(--bg-elev);
+    border: 1px solid var(--line);
+    border-radius: var(--r-md);
+    padding: 26px;
+    position: relative;
+  }
+  .rq .num {
+    font-family: var(--mono); color: var(--accent);
+    font-size: 13px; font-weight: 600; letter-spacing: .06em;
+  }
+  .rq h3 {
+    font-size: 16px; font-weight: 600;
+    margin: 6px 0 10px; line-height: 1.4;
+  }
+  .rq p {
+    color: var(--text-dim); font-size: 14px;
+    margin: 0;
+  }
+
+  /* ─── Models grid ─────────────────────────────────── */
+  .model-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+  }
+  @media (max-width: 900px) { .model-grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 540px) { .model-grid { grid-template-columns: 1fr; } }
+  .model {
+    background: var(--bg-elev);
+    border: 1px solid var(--line);
+    border-radius: var(--r-md);
+    padding: 18px;
+    transition: border-color .2s, transform .2s;
+  }
+  .model:hover { border-color: var(--line-strong); transform: translateY(-2px); }
+  .model .name {
+    font-weight: 600; color: var(--text); font-size: 15px;
+    display: flex; justify-content: space-between; align-items: flex-start; gap: 8px;
+  }
+  .model .tag {
+    font-size: 10px; font-family: var(--mono);
+    color: var(--text-muted); text-transform: uppercase;
+    letter-spacing: .06em;
+    background: var(--bg-elev-2);
+    padding: 3px 7px; border-radius: 4px;
+    border: 1px solid var(--line); white-space: nowrap;
+  }
+  .model .desc {
+    color: var(--text-dim); font-size: 13px;
+    margin-top: 8px; line-height: 1.55;
+  }
+  .model.benchmark { border-left: 3px solid var(--blue); }
+  .model.linear    { border-left: 3px solid var(--purple); }
+  .model.ml        { border-left: 3px solid var(--green); }
+  .model.foundation{ border-left: 3px solid var(--accent); }
+
+  /* ─── Findings ─────────────────────────────────────── */
+  .findings-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 18px;
+    counter-reset: finding;
+  }
+  .finding {
+    background: var(--bg-elev);
+    border: 1px solid var(--line);
+    border-radius: var(--r-md);
+    padding: 26px 28px;
+    display: grid;
+    grid-template-columns: 56px 1fr;
+    gap: 22px;
+    align-items: start;
+  }
+  @media (max-width: 720px) {
+    .finding { grid-template-columns: 1fr; gap: 12px; }
+  }
+  .finding::before {
+    counter-increment: finding;
+    content: counter(finding, decimal-leading-zero);
+    font-family: var(--mono);
+    font-size: 22px; font-weight: 700;
+    color: var(--accent);
+    line-height: 1.2;
+  }
+  .finding h3 {
+    margin: 0 0 8px; font-size: 18px; font-weight: 600;
+    line-height: 1.35;
+  }
+  .finding p {
+    color: var(--text-dim); margin: 0 0 8px;
+    font-size: 15px;
+  }
+  .finding .stat-row {
+    display: flex; gap: 16px; flex-wrap: wrap;
+    margin-top: 10px;
+  }
+  .finding .kpi {
+    font-family: var(--mono); font-size: 12px;
+    color: var(--text); background: var(--bg-elev-2);
+    border: 1px solid var(--line);
+    padding: 5px 10px; border-radius: 6px;
+  }
+  .finding .kpi b { color: var(--accent); font-weight: 600; }
+
+  /* ─── Results table ────────────────────────────────── */
+  .table-wrap {
+    background: var(--bg-elev);
+    border: 1px solid var(--line);
+    border-radius: var(--r-md);
+    overflow-x: auto;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+    min-width: 720px;
+  }
+  th, td {
+    padding: 14px 18px;
+    text-align: left;
+    border-bottom: 1px solid var(--line);
+  }
+  th {
+    background: var(--bg-elev-2);
+    color: var(--text-dim);
+    font-weight: 600;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    font-family: var(--mono);
+  }
+  td.num { font-family: var(--mono); }
+  tr.benchmark td { background: rgba(96,165,250,0.04); font-weight: 500; }
+  tr.winner td { background: rgba(245,158,11,0.06); }
+  tr.winner td:first-child::before {
+    content: '★ '; color: var(--accent);
+  }
+  tr.fail td { color: var(--text-muted); }
+  td .pill-sig {
+    display: inline-block;
+    font-size: 11px; font-family: var(--mono);
+    padding: 2px 7px; border-radius: 4px;
+    background: rgba(52,211,153,0.1);
+    color: var(--green); border: 1px solid rgba(52,211,153,0.25);
+  }
+  td .pill-ns {
+    display: inline-block;
+    font-size: 11px; font-family: var(--mono);
+    padding: 2px 7px; border-radius: 4px;
+    background: var(--bg-elev-2); color: var(--text-muted);
+    border: 1px solid var(--line);
+  }
+
+  /* ─── Implications ─────────────────────────────────── */
+  .imp-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 18px;
+  }
+  @media (max-width: 900px) { .imp-grid { grid-template-columns: 1fr; } }
+  .imp {
+    background: var(--bg-elev);
+    border: 1px solid var(--line);
+    border-radius: var(--r-md);
+    padding: 26px;
+  }
+  .imp .role {
+    font-family: var(--mono); color: var(--accent);
+    font-size: 12px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: .08em;
+  }
+  .imp h4 {
+    margin: 8px 0 10px; font-size: 17px; font-weight: 600;
+  }
+  .imp p {
+    color: var(--text-dim); margin: 0; font-size: 14.5px;
+  }
+
+  /* ─── Footer ──────────────────────────────────────── */
+  footer {
+    padding: 56px 24px;
+    color: var(--text-muted);
+    font-size: 14px;
+    text-align: center;
+  }
+  footer a { color: var(--text-dim); }
+  footer a:hover { color: var(--accent); }
+  section { scroll-margin-top: 72px; }
+</style>
+</head>
+<body>
+
+<nav class="top">
+  <div class="inner">
+    <div class="brand"><span class="dot"></span> EUR/NOK Foundation Models</div>
+    <div class="links">
+      <a href="#questions">Questions</a>
+      <a href="#models">Models</a>
+      <a href="#findings">Findings</a>
+      <a href="#results">Results</a>
+      <a href="#implications">Implications</a>
+    </div>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="container">
+    <span class="pill"><span class="dot"></span> Master's Thesis · NHH · 2025</span>
+    <h1>Can foundation models beat a random walk at forecasting <span class="accent">EUR/NOK</span>?</h1>
+    <p class="lede">
+      We test whether transformer-based foundation models — Google's TimesFM and Amazon's
+      Chronos2 — can outperform a driftless random walk and traditional econometric and
+      machine-learning benchmarks on the EUR/NOK exchange rate at one- and three-month
+      horizons.
+    </p>
+    <div class="meta">
+      <span>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        Erlend Rake Ellingsen &amp; Brede Espelid
+      </span>
+      <span>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+        NHH · MSc Business Analytics
+      </span>
+      <span>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+        Supervisor: Walter Pohl
+      </span>
+    </div>
+  </div>
+</header>
+
+<section class="stats">
+  <div class="container">
+    <div class="stat-grid">
+      <div class="stat"><div class="num"><span class="accent">25</span></div><div class="label">Years of FX data</div></div>
+      <div class="stat"><div class="num"><span class="accent">14</span></div><div class="label">Model variants</div></div>
+      <div class="stat"><div class="num"><span class="accent">11</span></div><div class="label">Currencies (transfer)</div></div>
+      <div class="stat"><div class="num"><span class="accent">2</span></div><div class="label">Forecast horizons</div></div>
+    </div>
+  </div>
+</section>
+
+<section class="block" id="questions">
+  <div class="container">
+    <span class="eyebrow">Research questions</span>
+    <h2>Three questions, one currency pair.</h2>
+    <p class="section-lede">
+      We frame the study around three connected questions: how foundation models stack up
+      against the standard benchmarks, how the macro-financial information set changes the
+      answer, and whether learning across other currencies improves EUR/NOK forecasts.
+    </p>
+
+    <div class="rq-grid">
+      <div class="rq">
+        <span class="num">RQ 01</span>
+        <h3>Foundation models vs. classical benchmarks</h3>
+        <p>How do TimesFM 2.0/2.5 and Chronos2 compare to a driftless random walk, VAR/VARX, and gradient-boosted trees on EUR/NOK at one- and three-month horizons?</p>
+      </div>
+      <div class="rq">
+        <span class="num">RQ 02</span>
+        <h3>The information set</h3>
+        <p>Does the choice of macro-financial covariates — VIX, equity indices, oil, real exchange rate, inflation and rate differentials — change which model wins, and by how much?</p>
+      </div>
+      <div class="rq">
+        <span class="num">RQ 03</span>
+        <h3>Cross-currency transfer</h3>
+        <p>Can finetuning on a panel of other currencies (AUD, CAD, CHF, GBP, JPY, SEK, USD, …) before EUR/NOK evaluation produce more robust forecasts?</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="block" id="models">
+  <div class="container">
+    <span class="eyebrow">Model lineup</span>
+    <h2>From a random walk to a finetuned transformer.</h2>
+    <p class="section-lede">
+      We benchmark four model families, then probe each foundation model with covariate
+      ablations (LOFO) and cross-currency finetuning to see which design choices matter.
+    </p>
+
+    <div class="model-grid">
+      <div class="model benchmark">
+        <div class="name">Driftless Random Walk <span class="tag">benchmark</span></div>
+        <div class="desc">The hardest benchmark in FX forecasting — and the one most models fail to beat.</div>
+      </div>
+      <div class="model linear">
+        <div class="name">VAR / VARX <span class="tag">linear macro</span></div>
+        <div class="desc">Classic vector autoregression with and without exogenous macro covariates.</div>
+      </div>
+      <div class="model ml">
+        <div class="name">XGBoost <span class="tag">gradient boosting</span></div>
+        <div class="desc">Price-only, broad-macro, macro+financial, and leave-one-feature-out variants.</div>
+      </div>
+      <div class="model foundation">
+        <div class="name">TimesFM 2.0 / 2.5 <span class="tag">foundation</span></div>
+        <div class="desc">Google's decoder-only foundation model for time series, evaluated zero-shot.</div>
+      </div>
+      <div class="model foundation">
+        <div class="name">Chronos2 <span class="tag">foundation</span></div>
+        <div class="desc">Amazon's encoder-based foundation model — zero-shot, with covariates, LOFO, and finetuned.</div>
+      </div>
+      <div class="model foundation">
+        <div class="name">Chronos2-FT <span class="tag">transfer learning</span></div>
+        <div class="desc">Finetuned on a 1980–1999 Norges Bank panel of 11 currencies before EUR/NOK evaluation.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="block" id="findings">
+  <div class="container">
+    <span class="eyebrow">Key findings</span>
+    <h2>Two-speed predictability — and why it matters.</h2>
+    <p class="section-lede">
+      The most consistent message: 1-month EUR/NOK is essentially noise, but 3-month
+      movements contain enough persistent structure for the right foundation model — given
+      the right covariates — to beat a random walk significantly.
+    </p>
+
+    <div class="findings-grid">
+
+      <div class="finding">
+        <div>
+          <h3>The random walk is genuinely hard to beat at one month.</h3>
+          <p>Across all 14 model variants, only two challengers beat the driftless random walk on RMSE at the 1-month horizon — and only by a hair. Directional accuracy of 71% for the random walk sets a high bar.</p>
+          <div class="stat-row">
+            <span class="kpi">RW 1M RMSE <b>0.1394</b></span>
+            <span class="kpi">RW directional <b>71%</b></span>
+            <span class="kpi">TimesFM 2.5 RMSE <b>0.1402</b> · DM p=0.0045</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="finding">
+        <div>
+          <h3>VAR and VARX collapse out of sample.</h3>
+          <p>Fixed-parameter linear macro relations fall apart in the post-2020 regime. Quarterly RMSE balloons above 0.30 versus the random walk's 0.2127 — a clear case of structural-break risk in classical econometric models.</p>
+          <div class="stat-row">
+            <span class="kpi">VAR/VARX 3M RMSE <b>&gt; 0.30</b></span>
+            <span class="kpi">RW 3M RMSE <b>0.2127</b></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="finding">
+        <div>
+          <h3>Chronos2 + transfer learning + LOFO covariates wins quarterly.</h3>
+          <p>The strongest 3-month model is Chronos2 finetuned on the cross-currency panel and conditioned on a compact covariate set — VIX, S&amp;P 500, and the real exchange rate. The improvement is statistically significant by Diebold–Mariano.</p>
+          <div class="stat-row">
+            <span class="kpi">Chronos2-FT-LOFO 3M RMSE <b>0.1971</b></span>
+            <span class="kpi">vs. RW <b>0.2127</b></span>
+            <span class="kpi">DM p-value <b>0.0230</b></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="finding">
+        <div>
+          <h3>The information set matters more than model size.</h3>
+          <p>Price-only inputs and broad-macro kitchen-sink models both underperform. What works is a small, economically motivated trio: a global risk indicator (VIX), an equity-market signal (S&amp;P 500), and a competitiveness anchor (real exchange rate q).</p>
+          <div class="stat-row">
+            <span class="kpi">Best signals: <b>VIX · S&amp;P 500 · q</b></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="finding">
+        <div>
+          <h3>Cross-currency transfer gives Chronos2 robustness — but TimesFM 2.5 generalises broadly out of the box.</h3>
+          <p>Finetuning Chronos2 on 11 other currencies before evaluating EUR/NOK improves quarterly performance, but the same recipe is weaker when the covariate set is restricted. TimesFM 2.5 gives the most consistent zero-shot performance across the FX panel.</p>
+        </div>
+      </div>
+
+      <div class="finding">
+        <div>
+          <h3>Magnitude is modest but systematic.</h3>
+          <p>The best models cut quarterly RMSE by about 0.015–0.02 units relative to the random walk — roughly 1.5–2 øre per euro at the 3-month horizon. Small in absolute terms, but reliable enough to matter for hedging and budgeting decisions.</p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<section class="block" id="results">
+  <div class="container">
+    <span class="eyebrow">Headline results</span>
+    <h2>RMSE vs. random walk, at both horizons.</h2>
+    <p class="section-lede">
+      A condensed view of the result table from the thesis. ★ marks models that beat the
+      random walk on RMSE; the significance column reports the Diebold–Mariano p-value
+      against the random-walk benchmark.
+    </p>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Model</th>
+            <th>Family</th>
+            <th>1M RMSE</th>
+            <th>3M RMSE</th>
+            <th>3M significance</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="benchmark">
+            <td>Driftless Random Walk</td>
+            <td>Benchmark</td>
+            <td class="num">0.1394</td>
+            <td class="num">0.2127</td>
+            <td>—</td>
+          </tr>
+          <tr class="fail">
+            <td>VAR / VARX</td>
+            <td>Linear macro</td>
+            <td class="num">&gt; 0.20</td>
+            <td class="num">&gt; 0.30</td>
+            <td><span class="pill-ns">fails</span></td>
+          </tr>
+          <tr>
+            <td>XGBoost (macro+fin)</td>
+            <td>ML</td>
+            <td class="num">0.143</td>
+            <td class="num">0.215</td>
+            <td><span class="pill-ns">n.s.</span></td>
+          </tr>
+          <tr class="winner">
+            <td>TimesFM 2.5</td>
+            <td>Foundation (zero-shot)</td>
+            <td class="num">0.1402</td>
+            <td class="num">0.207</td>
+            <td><span class="pill-sig">p = 0.0045 (1M)</span></td>
+          </tr>
+          <tr class="winner">
+            <td>Chronos2 LOFO</td>
+            <td>Foundation (covariate)</td>
+            <td class="num">0.1405</td>
+            <td class="num">0.205</td>
+            <td><span class="pill-sig">p = 0.0095 (1M)</span></td>
+          </tr>
+          <tr class="winner">
+            <td>Chronos2-FT-LOFO</td>
+            <td>Foundation (transfer)</td>
+            <td class="num">0.142</td>
+            <td class="num">0.1971</td>
+            <td><span class="pill-sig">p = 0.0230 (3M)</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="color: var(--text-muted); font-size: 13px; margin-top: 16px; font-family: var(--mono);">
+      Numbers are condensed from the thesis result table. See the full PDF for all 14 model variants and additional metrics.
+    </p>
+  </div>
+</section>
+
+<section class="block" id="implications">
+  <div class="container">
+    <span class="eyebrow">Practical implications</span>
+    <h2>So what?</h2>
+    <p class="section-lede">
+      Different decisions live on different time horizons. The findings translate directly
+      into how each user of EUR/NOK forecasts should think about model choice and risk.
+    </p>
+
+    <div class="imp-grid">
+      <div class="imp">
+        <span class="role">Norges Bank</span>
+        <h4>Treat 1-month as noise.</h4>
+        <p>Short-horizon EUR/NOK movements should be treated as essentially unpredictable. Medium-term projections benefit from conditioning on global risk indices, equity markets, and real competitiveness — not broad macro kitchen sinks.</p>
+      </div>
+      <div class="imp">
+        <span class="role">Exporters / importers</span>
+        <h4>Hedge on quarterly signal, not monthly.</h4>
+        <p>Quarter-ahead hedging and budgeting can lean on foundation-model forecasts conditioned on a small, economically motivated covariate set. One-month decisions are better served by the random walk and explicit scenario analysis.</p>
+      </div>
+      <div class="imp">
+        <span class="role">Forecasting practitioners</span>
+        <h4>Pair foundation models with economics.</h4>
+        <p>Foundation models earn their keep when paired with (a) a compact, economically motivated covariate set and (b) cross-currency finetuning. They are not drop-in replacements for traditional models, but they shift the frontier when used carefully.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="container">
+    Master's thesis at <strong>Norwegian School of Economics (NHH)</strong> · 2025<br/>
+    Erlend Rake Ellingsen &amp; Brede Espelid · Supervisor: Walter Pohl<br/>
+    <a href="https://github.com/bredeespelid">github.com/bredeespelid</a>
+  </div>
+</footer>
+
+</body>
+</html>
